@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My First 3D Work</title>
+    <style>
+        /* 簡單的 CSS 歸零，讓畫面全螢幕 */
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #F5F5DC; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.182.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.182.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // --- 1. 初始化場景 (Scene) ---
+    const scene = new THREE.Scene();
+    // 設定米白色背景 (Beige)
+    scene.background = new THREE.Color(0xF5F5DC); 
+    // 加入一點點霧氣效果，讓遠處更柔和 (選用)
+    scene.fog = new THREE.Fog(0xF5F5DC, 10, 50);
+
+    // --- 2. 初始化相機 (Camera) ---
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);    camera.position.set(0, 2, 5); // 初始位置，稍後會自動調整
+
+    // --- 3. 初始化渲染器 (Renderer) ---
+    const renderer = new THREE.WebGLRenderer({ antialias: true }); // 開啟反鋸齒，邊緣更平滑
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio); // 支援高解析度螢幕
+    renderer.shadowMap.enabled = true; // 開啟陰影計算
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 柔和陰影
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; // 電影感色調
+    document.body.appendChild(renderer.domElement);
+
+    // --- 4. 控制器 (OrbitControls) - 讓你可以用滑鼠旋轉、縮放 ---
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; // 啟用阻尼，滑動時有慣性感覺更高級
+
+    // --- 5. 燈光設置 (Lighting) - 溫暖色調 ---
+    // (A) 環境光：提供基礎亮度，偏暖黃
+    const ambientLight = new THREE.AmbientLight(0xffeebb, 0.6);
+    scene.add(ambientLight);
+
+    // (B) 主光源 (方向光)：模擬太陽，從右上方打下來
+    const mainLight = new THREE.DirectionalLight(0xffaa33, 2.0); // 暖橘光，強度 2.0
+    mainLight.position.set(5, 8, 5); // 設定在右上方
+    mainLight.castShadow = true; // 產生陰影
+    
+    // 優化陰影品質
+    mainLight.shadow.mapSize.width = 2048;
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.bias = -0.0001;
+    scene.add(mainLight);
+
+    // --- 6. 建立地面接收陰影 (Shadow Catcher) ---
+    // 使用 ShadowMaterial，只顯示陰影，本身是透明的，這樣能完美融入背景色
+    const planeGeometry = new THREE.PlaneGeometry(100, 100);
+    const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.3, color: 0x8b4513 }); // 棕色陰影
+    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    plane.rotation.x = -Math.PI / 2; // 轉平
+    plane.position.y = -0.01; // 稍微放低一點點避免重疊
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // --- 7. 載入 GLB 模型 ---
+    const loader = new GLTFLoader();
+
+    loader.load(
+        'first_work.glb', // 檔案路徑
+        function (gltf) {
+            const model = gltf.scene;
+
+            // --- 自動調整模型位置與大小 (Auto-fit) ---
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            // 將模型歸零到正中心
+            model.position.x -= center.x;
+            model.position.y -= box.min.y; // 讓模型底部貼齊地面
+            model.position.z -= center.z;
+
+            // 開啟模型陰影
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+
+            scene.add(model);
+
+        },
+        undefined,
+        function (error) {
+            console.error('模型載入失敗，請檢查路徑或檔案:', error);
+        }
+    );
+
+    // --- 8. 動畫迴圈 (Render Loop) ---
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // --- 9. 視窗縮放處理 ---
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+</script>
+</body>
+</html>
